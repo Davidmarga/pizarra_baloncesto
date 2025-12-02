@@ -23,38 +23,16 @@ function useImage(src) {
 export default function App() {
   const stageRef = React.useRef(null);
 
-// responsive stage
-const [stageSize, setStageSize] = React.useState({
-  width: window.innerWidth,
-  height: window.visualViewport ? window.visualViewport.height : window.innerHeight
-});
-
-React.useEffect(() => {
-  function resize() {
-    setStageSize({
-      width: window.innerWidth,
-      height: window.visualViewport ? window.visualViewport.height : window.innerHeight
-    });
-  }
-
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", resize);
-    window.visualViewport.addEventListener("scroll", resize); // necesario en móviles
-  }
-
-  window.addEventListener("resize", resize);
-
-  resize();
-
-  return () => {
-    window.removeEventListener("resize", resize);
-    if (window.visualViewport) {
-      window.visualViewport.removeEventListener("resize", resize);
-      window.visualViewport.removeEventListener("scroll", resize);
+  // responsive stage
+  const [stageSize, setStageSize] = React.useState({ width: window.innerWidth - 20, height: window.innerHeight - 100 });
+  React.useEffect(() => {
+    function resize() {
+      setStageSize({ width: window.innerWidth - 20, height: window.innerHeight - 100 });
     }
-  };
-}, []);
-
+    resize();
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
 
   const [useFullCourt, setUseFullCourt] = React.useState(false);
   const courtUrl = useFullCourt ? courtImgFull : courtImg2;
