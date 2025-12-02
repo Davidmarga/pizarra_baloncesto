@@ -43,8 +43,6 @@ export default function App() {
   const [drawLines, setDrawLines] = React.useState([]);
   const drawingRef = React.useRef(false);
 
-  const [courtHeightScale, setCourtHeightScale] = React.useState(1);
-
   // add/remove/update players
   const addPlayer = () => {
     setPlayers(prev => {
@@ -52,8 +50,8 @@ export default function App() {
       const newPlayer = {
         id,
         name: String.fromCharCode(65 + (prev.length % 26)),
-        x: Math.min(200 + prev.length * 40, stageSize.width - 60),
-        y: Math.min(120 + prev.length * 30, stageSize.height - 60),
+        x: 0.2 + (prev.length * 0.04), // posición relativa inicial
+        y: 0.2 + (prev.length * 0.03),
         color: `hsl(${(id * 73) % 360} 80% 55%)`,
         path: [],
       };
@@ -64,16 +62,6 @@ export default function App() {
   const removePlayer = id => setPlayers(prev => prev.filter(p => p.id !== id));
   const updatePlayer = (id, patch) => setPlayers(prev => prev.map(p => (p.id === id ? { ...p, ...patch } : p)));
   const clearPlayerPaths = () => setPlayers(prev => prev.map(p => ({ ...p, path: [] })));
-
-  const handlePlayerDragMove = (e, id) => {
-    if (mode !== "play") return;
-    const pos = e.target.position();
-    setPlayers(prev =>
-      prev.map(p =>
-        p.id === id ? { ...p, x: pos.x, y: pos.y, path: [...p.path, { x: pos.x, y: pos.y }] } : p
-      )
-    );
-  };
 
   // drawing handlers
   const handlePointerDown = e => {
@@ -105,16 +93,14 @@ export default function App() {
     if (!courtImage) return { x: 0, y: 0, width: 0, height: 0 };
     const ratio = courtImage.width / courtImage.height;
 
-    let width = stageSize.width * 0.9;
-    let height = width / ratio;
+    let width = stageSize.width;
+    let height = stageSize.height;
 
-    if (height > stageSize.height * 0.8) {
-      height = stageSize.height * 0.8;
+    if (width / height > ratio) {
       width = height * ratio;
+    } else {
+      height = width / ratio;
     }
-
-    width *= courtHeightScale;
-    height *= courtHeightScale;
 
     return {
       x: (stageSize.width - width) / 2,
@@ -125,7 +111,22 @@ export default function App() {
   };
 
   const courtRect = getCourtRect();
-  const scaleFactor = courtRect.width / 900; // escala relativa para jugadores
+
+  // handle player drag (almacenando coordenadas relativas)
+  const handlePlayerDragMove = (e, id) => {
+    if (mode !== "play") return;
+    const pos = e.target.position();
+    const relX = (pos.x - courtRect.x) / courtRect.width;
+    const relY = (pos.y - courtRect.y) / courtRect.height;
+
+    setPlayers(prev =>
+      prev.map(p =>
+        p.id === id
+          ? { ...p, x: relX, y: relY, path: [...p.path, { x: relX, y: relY }] }
+          : p
+      )
+    );
+  };
 
   // save players to localStorage
   React.useEffect(() => {
@@ -136,7 +137,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen p-2 flex flex-col gap-4 bg-gray-50">
-      {/* header buttons */}
+      {/* header buttons + jugadores horizontal */}
       <div className="flex flex-wrap gap-2 items-center">
         <button
           onClick={() => setMode("play")}
@@ -156,135 +157,110 @@ export default function App() {
         <button onClick={undoDraw} className="px-3 py-1 bg-gray-300 rounded">Deshacer</button>
         <button onClick={clearAll} className="px-3 py-1 bg-red-500 text-white rounded">Limpiar todo</button>
 
-        <div className="ml-auto flex items-center gap-2">
-          <label className="text-sm">Altura pista</label>
-          <input
-            type="range"
-            min="0.6"
-            max="1.6"
-            step="0.05"
-            value={courtHeightScale}
-            onChange={e => setCourtHeightScale(Number(e.target.value))}
-          />
+        <button
+          className="px-3 py-1 rounded bg-purple-600 text-white"
+          onClick={() => setUseFullCourt(v => !v)}
+        >
+          {useFullCourt ? "Ver pista recortada" : "Ver pista completa"}
+        </button>
+
+        {/* jugadores horizontal */}
+        <div className="flex flex-wrap gap-2 items-center ml-4">
+          {players.map(p => (
+            <div key={p.id} className="flex items-center gap-1 bg-gray-100 p-1 rounded">
+              <div style={{ width: 18, height: 18, background: p.color, borderRadius: 6 }} />
+              <input
+                value={p.name}
+                onChange={e => updatePlayer(p.id, { name: e.target.value })}
+                className="border p-1 rounded w-12 text-sm"
+              />
+              <button
+                onClick={() => removePlayer(p.id)}
+                className="px-2 py-1 bg-red-100 rounded text-sm"
+              >
+                X
+              </button>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="flex gap-4 items-start flex-wrap">
-        {/* menú lateral: oculto en pantallas pequeñas */}
-        <div className="hidden md:flex flex-col w-64 bg-white p-4 rounded-xl shadow">
-          <h2 className="text-lg font-semibold mb-2">Controles</h2>
+      {/* stage */}
+      <div style={{ width: stageSize.width, height: stageSize.height, borderRadius: 12, overflow: "hidden", background: "white" }}>
+        <Stage
+          ref={stageRef}
+          width={stageSize.width}
+          height={stageSize.height}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+        >
+          <Layer>
+            {courtImage && (
+              <KImage
+                image={courtImage}
+                x={courtRect.x}
+                y={courtRect.y}
+                width={courtRect.width}
+                height={courtRect.height}
+              />
+            )}
 
-          <div className="mb-3">
-            <label className="text-sm">Imagen pista</label>
-            <button
-              className="px-3 py-1 rounded bg-purple-600 text-white w-full mt-1"
-              onClick={() => setUseFullCourt(v => !v)}
-            >
-              {useFullCourt ? "Ver pista recortada" : "Ver pista completa"}
-            </button>
-          </div>
-
-          <div className="mb-3">
-            <div className="text-sm font-medium mb-1">Jugadores</div>
-            <div className="flex flex-col gap-2">
-              {players.map(p => (
-                <div key={p.id} className="flex items-center gap-2">
-                  <div style={{ width: 18, height: 18, background: p.color, borderRadius: 6 }} />
-                  <input
-                    value={p.name}
-                    onChange={e => updatePlayer(p.id, { name: e.target.value })}
-                    className="border p-1 rounded flex-1"
-                  />
-                  <input
-                    type="color"
-                    value={p.color}
-                    onChange={e => updatePlayer(p.id, { color: e.target.value })}
-                  />
-                  <button onClick={() => removePlayer(p.id)} className="px-2 py-1 bg-red-100 rounded">X</button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* stage */}
-        <div className="flex-1 bg-white p-2 rounded-xl shadow">
-          <div className="mb-2 text-xs text-gray-600">Arrastra jugadores. En modo dibujo, pinta sobre la pista.</div>
-
-          <div style={{ width: stageSize.width, height: stageSize.height, borderRadius: 12, overflow: "hidden" }}>
-            <Stage
-              ref={stageRef}
-              width={stageSize.width}
-              height={stageSize.height}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-            >
-              <Layer>
-                {courtImage && (
-                  <KImage
-                    image={courtImage}
-                    x={courtRect.x}
-                    y={courtRect.y}
-                    width={courtRect.width}
-                    height={courtRect.height}
-                  />
-                )}
-
-                {/* trails de jugadores → SOLO si mode === "play" */}
-                {mode === "play" &&
-                  players.map(p =>
-                    p.path.length > 1 ? (
-                      <Line
-                        key={`trail-${p.id}`}
-                        points={p.path.flatMap(pt => [pt.x * scaleFactor, pt.y * scaleFactor])}
-                        stroke={p.color}
-                        strokeWidth={4 * scaleFactor}
-                        tension={0.4}
-                        lineCap="round"
-                      />
-                    ) : null
-                  )}
-
-                {/* dibujo libre */}
-                {drawLines.map((l, i) => (
+            {/* trails de jugadores → SOLO si mode === "play" */}
+            {mode === "play" &&
+              players.map(p =>
+                p.path.length > 1 ? (
                   <Line
-                    key={`draw-${i}`}
-                    points={l.points}
-                    stroke={l.stroke}
-                    strokeWidth={l.strokeWidth}
-                    tension={0.3}
+                    key={`trail-${p.id}`}
+                    points={p.path.flatMap(pt => [
+                      courtRect.x + pt.x * courtRect.width,
+                      courtRect.y + pt.y * courtRect.height
+                    ])}
+                    stroke={p.color}
+                    strokeWidth={4}
+                    tension={0.4}
                     lineCap="round"
                   />
-                ))}
+                ) : null
+              )}
 
-                {/* jugadores → SOLO si mode === "play" */}
-                {mode === "play" &&
-                  players.map(p => (
-                    <Group key={p.id}>
-                      <Circle
-                        x={p.x * scaleFactor}
-                        y={p.y * scaleFactor}
-                        radius={20 * scaleFactor}
-                        fill={p.color}
-                        draggable
-                        shadowBlur={5}
-                        onDragMove={e => handlePlayerDragMove(e, p.id)}
-                        onDragEnd={e => handlePlayerDragMove(e, p.id)}
-                      />
-                      <Text
-                        x={p.x * scaleFactor - 6 * scaleFactor}
-                        y={p.y * scaleFactor - 8 * scaleFactor}
-                        text={p.name}
-                        fontSize={14 * scaleFactor}
-                        fill="#fff"
-                      />
-                    </Group>
-                  ))}
-              </Layer>
-            </Stage>
-          </div>
-        </div>
+            {/* dibujo libre */}
+            {drawLines.map((l, i) => (
+              <Line
+                key={`draw-${i}`}
+                points={l.points}
+                stroke={l.stroke}
+                strokeWidth={l.strokeWidth}
+                tension={0.3}
+                lineCap="round"
+              />
+            ))}
+
+            {/* jugadores → SOLO si mode === "play" */}
+            {mode === "play" &&
+              players.map(p => (
+                <Group key={p.id}>
+                  <Circle
+                    x={courtRect.x + p.x * courtRect.width}
+                    y={courtRect.y + p.y * courtRect.height}
+                    radius={20}
+                    fill={p.color}
+                    draggable
+                    shadowBlur={5}
+                    onDragMove={e => handlePlayerDragMove(e, p.id)}
+                    onDragEnd={e => handlePlayerDragMove(e, p.id)}
+                  />
+                  <Text
+                    x={courtRect.x + p.x * courtRect.width - 6}
+                    y={courtRect.y + p.y * courtRect.height - 8}
+                    text={p.name}
+                    fontSize={14}
+                    fill="#fff"
+                  />
+                </Group>
+              ))}
+          </Layer>
+        </Stage>
       </div>
     </div>
   );
