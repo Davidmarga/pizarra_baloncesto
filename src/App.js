@@ -1,7 +1,6 @@
 // src/App.js
 import React from "react";
 import { Stage, Layer, Line, Image as KImage, Circle, Group, Text } from "react-konva";
-import courtImg from "./resources/img.png";
 import courtImg2 from "./resources/img.jpg";
 import courtImgFull from "./resources/completa.png";
 
